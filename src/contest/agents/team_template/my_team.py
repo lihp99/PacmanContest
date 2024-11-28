@@ -32,8 +32,13 @@ from util import nearest_point
 # Team creation #
 #################
 
+
+
 def create_team(first_index, second_index, is_red,
-                first='OffensiveReflexAgent', second='DefensiveReflexAgent', num_training=0):
+                first='OffensiveReflexAgent', second='AstarAgent', num_training=0):
+
+# def create_team(first_index, second_index, is_red,
+#                 first='OffensiveReflexAgent', second='AStarAgent', num_training=0):
     """
     This function should return a list of two agents that will form the
     team, initialized using firstIndex and secondIndex as their agent
@@ -68,17 +73,23 @@ class ReflexCaptureAgent(CaptureAgent):
         self.start = game_state.get_agent_position(self.index)
         CaptureAgent.register_initial_state(self, game_state)
 
+
     def choose_action(self, game_state):
         """
         Picks among the actions with the highest Q(s,a).
         """
+        # print(f"\nREFLEX AGENT: game_state:\n{game_state}\n")
+        # print(dir(game_state))
+        # print("\n")
         actions = game_state.get_legal_actions(self.index)
+        # print(f"\nREFLEX AGENT: type of agent:{self.index}")
+        # print(f"agent.red:{self.red}")
+        # print(f"\nREFLEX AGENT: actions:{actions}")
 
         # You can profile your evaluation time by uncommenting these lines
         # start = time.time()
         values = [self.evaluate(game_state, a) for a in actions]
         # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
-
         max_value = max(values)
         best_actions = [a for a, v in zip(actions, values) if v == max_value]
 
@@ -96,6 +107,8 @@ class ReflexCaptureAgent(CaptureAgent):
                     best_dist = dist
             return best_action
 
+        # print(f"actions:{actions}")
+        # print(f"best_actions:{best_actions}")
         return random.choice(best_actions)
 
     def get_successor(self, game_state, action):
@@ -154,7 +167,9 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
             my_pos = successor.get_agent_state(self.index).get_position()
             min_distance = min([self.get_maze_distance(my_pos, food) for food in food_list])
             features['distance_to_food'] = min_distance
+        print(f"\nFEATURES for {self.index}: {features}\n")
         return features
+        
 
     def get_weights(self, game_state, action):
         return {'successor_score': 100, 'distance_to_food': -1}
@@ -195,3 +210,66 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
 
     def get_weights(self, game_state, action):
         return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2}
+
+
+class AstarAgent(ReflexCaptureAgent):
+    def __init__(self, index):
+        super().__init__(index)
+        self.start = None  # To store the initial position
+
+    def register_initial_state(self, game_state):
+        print("REGISTER_INITIAL STATE ASTAR")
+        self.start = game_state.get_agent_position(self.index)
+        super().register_initial_state(game_state)
+
+    def choose_action(self, game_state):
+        """
+        Use A* to choose the best next action.
+        """
+        print(f"USING ASTAR AGENT index {self.index}")
+        path = self.a_star_search(game_state, self.null_heuristic)
+        print(f"PATH: {path}")
+        return path.pop(0) if path else Directions.STOP
+
+    def a_star_search(self, game_state, heuristic):
+        """
+        Simplified A* search directly using game_state and heuristics.
+        """
+        print("A* SEARCH gets called by the agent")
+        start_state = game_state.get_agent_position(self.index)
+        food_list = self.get_food(game_state).as_list()  # List of food positions
+        visited = set()
+        frontier = util.PriorityQueue()
+
+        # Push the starting state with an empty path and cost of 0
+        frontier.push((start_state, [], 0), heuristic(start_state, food_list))
+
+        while not frontier.is_empty():
+            current_state, path, cost = frontier.pop()
+
+            if current_state in food_list:  # Goal state: reaching food
+                return path
+
+            if current_state not in visited:
+                visited.add(current_state)
+
+                # Generate successors
+                for direction in game_state.get_legal_actions(self.index):
+                    successor_state = game_state.generate_successor(self.index, direction).get_agent_position(self.index)
+
+                    if successor_state not in visited:
+                        step_cost = 1  # Uniform cost for moving to a new position
+                        new_cost = cost + step_cost
+                        new_path = path + [direction]
+                        priority = new_cost + heuristic(successor_state, food_list)
+                        frontier.push((successor_state, new_path, new_cost), priority)
+        return []
+
+    def null_heuristic(self, state, food_list):
+        """
+        Simple heuristic: Manhattan distance to the closest food.
+        """
+        if not food_list:
+            return 0
+        return min(util.manhattan_distance(state, food) for food in food_list)
+

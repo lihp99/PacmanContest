@@ -281,4 +281,3 @@ class AstarAgentOffensive(CaptureAgent):
 
             # here make sure that the dude goes back to base if he has less than 2 food left (so if path len < 2)
             return path[0] if path else Directions.STOP
-        

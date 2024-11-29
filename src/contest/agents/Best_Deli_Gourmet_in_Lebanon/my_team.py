@@ -282,6 +282,126 @@ class OffensiveAstarAgent(CaptureAgent):
 
 
 
+
+
+class MinimaxGen:
+    def __init__(self, depth, evaluation_function, start_index):
+        self.depth = depth
+        self.evaluation_function = evaluation_function
+        self.start_index = start_index
+
+    def minimax(self, state, depth, agent_index, num_agents):
+        """Perform the Minimax algorithm."""
+        # Check if game is over or max depth reached
+
+
+        if state.is_over() or depth == 0:
+            return self.evaluation_function(state), None
+
+        # Skip unobservable opponent agents
+        while not state.get_agent_position(agent_index):
+            print(f"Skipping unobservable agent: {agent_index}")
+            agent_index = (agent_index + 1) % num_agents
+            # Decrease depth only after a full cycle
+            if agent_index == self.start_index:
+                depth -= 1
+            if depth == 0:
+                return self.evaluation_function(state), None
+
+        # Determine if this agent is maximizing or minimizing
+        is_maximizing = (agent_index % 2 == 0) == state.is_on_red_team(self.start_index)  # Red: 0, 2; Blue: 1, 3
+
+        print(f"Agent Index: {agent_index}, Depth: {depth}, Is Maximizing: {is_maximizing}")
+        print(f"Agent {agent_index} Legal Actions: {state.get_legal_actions(agent_index)}")
+
+        if is_maximizing:
+            return self.max_value(state, depth, agent_index, num_agents)
+        else:
+            return self.min_value(state, depth, agent_index, num_agents)
+
+    def max_value(self, state, depth, agent_index, num_agents):
+        """Maximizing team's turn."""
+        best_value = float('-inf')
+        best_action = None
+        for action in state.get_legal_actions(agent_index):
+            successor = state.generate_successor(agent_index, action)
+            value, _ = self.minimax(
+                successor,
+                depth - 1 if (agent_index + 1) % num_agents == self.start_index else depth,
+                (agent_index + 1) % num_agents,
+                num_agents
+            )
+            if value > best_value:
+                best_value, best_action = value, action
+        return best_value, best_action
+
+    def min_value(self, state, depth, agent_index, num_agents):
+        """Minimizing opponent's turn."""
+        best_value = float('inf')
+        best_action = None
+        for action in state.get_legal_actions(agent_index):
+            successor = state.generate_successor(agent_index, action)
+            value, _ = self.minimax(
+                successor,
+                depth - 1 if (agent_index + 1) % num_agents == self.start_index else depth,
+                (agent_index + 1) % num_agents,
+                num_agents
+            )
+            if value < best_value:
+                best_value, best_action = value, action
+        return best_value, best_action
+
+    def get_next_action(self, state):
+        num_agents = len(state.get_red_team_indices() + state.get_blue_team_indices())
+        #print(state.get_red_team_indices(), state.get_blue_team_indices())
+        _, best_action = self.minimax(state, self.depth, self.start_index, num_agents)
+        return best_action
+
+
+
+
+
+class OurAgent(CaptureAgent):
+
+    def __init__(self, index, time_for_computing=.1):
+        super().__init__(index, time_for_computing)
+
+
+        self.modes = ['get_home', 'park_the_bus', 'sneaky_pellet']
+        self.mode = 'park_the_bus'
+        #self.is_red = super.is_red
+
+        #self.astar_gen_pellet = AstarGen(goal_type="pellet")
+        #self.astar_gen_home = AstarGen(goal_type="home")
+        self.minimax_gen = MinimaxGen(depth=3, evaluation_function=self.park_that_bus, start_index=self.index)
+
+
+    def park_that_bus(self, game_state):
+        desired_column = 6 if game_state.is_on_red_team(self.index) else 6
+        #print(game_state.get_agent_position(self.index))
+        return -manhattan_distance(game_state.get_agent_position(self.index), (10,6))    # -game_state.get_num_agents() * 1000 + self.index
+
+    def choose_action(self, game_state):
+        print(dir(game_state))
+        if self.mode == 'sneaky_pellet':
+            return self.astar_gen_pellet.get_next_action()
+        elif self.mode == 'sneaky_pellet':
+            return self.astar_gen_home.get_next_action()
+        elif self.mode == 'park_the_bus':
+            print(game_state.get_red_team_indices(), game_state.get_blue_team_indices())
+            return self.minimax_gen.get_next_action(game_state)
+        else:
+            return
+
+
+
+
+
+
+
+
+
+
 # class AstarAgent(ReflexCaptureAgent):
 #     def __init__(self, index):
 #         super().__init__(index)

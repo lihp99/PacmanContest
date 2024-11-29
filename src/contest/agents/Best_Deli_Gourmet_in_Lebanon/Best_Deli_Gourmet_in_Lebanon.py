@@ -217,7 +217,7 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
 
 
 
-class AstarAgentOffensive(CaptureAgent):
+class OffensiveAstarAgent(CaptureAgent):
     def __init__(self, index, time_for_computing=.1):
         super().__init__(index, time_for_computing)
         self.start = None

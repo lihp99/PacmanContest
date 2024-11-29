@@ -35,7 +35,7 @@ from util import nearest_point
 
 
 def create_team(first_index, second_index, is_red,
-                first='OffensiveReflexAgent', second='AstarAgent', num_training=0):
+                first='DefensiveReflexAgent', second='OffensiveAstarAgent', num_training=0):
 
 # def create_team(first_index, second_index, is_red,
 #                 first='OffensiveReflexAgent', second='AStarAgent', num_training=0):
@@ -212,64 +212,134 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
         return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2}
 
 
-class AstarAgent(ReflexCaptureAgent):
-    def __init__(self, index):
-        super().__init__(index)
-        self.start = None  # To store the initial position
+
+
+class OffensiveAstarAgent(CaptureAgent):
+    def __init__(self, index, time_for_computing=.1):
+        super().__init__(index, time_for_computing)
+        self.start = None
 
     def register_initial_state(self, game_state):
-        print("REGISTER_INITIAL STATE ASTAR")
         self.start = game_state.get_agent_position(self.index)
-        super().register_initial_state(game_state)
+        CaptureAgent.register_initial_state(self, game_state)
 
-    def choose_action(self, game_state):
-        """
-        Use A* to choose the best next action.
-        """
-        print(f"USING ASTAR AGENT index {self.index}")
-        path = self.a_star_search(game_state, self.null_heuristic)
-        print(f"PATH: {path}")
-        return path.pop(0) if path else Directions.STOP
-
-    def a_star_search(self, game_state, heuristic):
-        """
-        Simplified A* search directly using game_state and heuristics.
-        """
-        print("A* SEARCH gets called by the agent")
-        start_state = game_state.get_agent_position(self.index)
-        food_list = self.get_food(game_state).as_list()  # List of food positions
-        visited = set()
+    def astar_search(self, initial_state, initial_pos, goal):
         frontier = util.PriorityQueue()
+        frontier.push((initial_state, initial_pos, []), 0)
+        explored = set()
+        state_costs = {initial_pos: 0}  # Dictionary to track the minimum cost to reach each state
 
-        # Push the starting state with an empty path and cost of 0
-        frontier.push((start_state, [], 0), heuristic(start_state, food_list))
 
         while not frontier.is_empty():
-            current_state, path, cost = frontier.pop()
+            current_state, current_pos, path = frontier.pop()
 
-            if current_state in food_list:  # Goal state: reaching food
+            if current_pos == goal:
                 return path
 
-            if current_state not in visited:
-                visited.add(current_state)
+            if current_pos in explored:
+                continue # skip expanded nodes
 
-                # Generate successors
-                for direction in game_state.get_legal_actions(self.index):
-                    successor_state = game_state.generate_successor(self.index, direction).get_agent_position(self.index)
+            else: explored.add(current_pos)
 
-                    if successor_state not in visited:
-                        step_cost = 1  # Uniform cost for moving to a new position
-                        new_cost = cost + step_cost
-                        new_path = path + [direction]
-                        priority = new_cost + heuristic(successor_state, food_list)
-                        frontier.push((successor_state, new_path, new_cost), priority)
-        return []
+            for action in current_state.get_legal_actions(self.index):
+                if action == Directions.STOP:
+                    continue
+                
+                successor = current_state.generate_successor(self.index, action) #Returns the successor state (a GameState object) after the specified agent takes the action.
+                next_pos = successor.get_agent_state(self.index).get_position() #Returns the position of agent after taken the current action
+                next_pos = nearest_point(next_pos)
 
-    def null_heuristic(self, state, food_list):
-        """
-        Simple heuristic: Manhattan distance to the closest food.
-        """
-        if not food_list:
-            return 0
-        return min(util.manhattan_distance(state, food) for food in food_list)
+                if next_pos in explored:
+                    continue
+
+                new_cost = state_costs[current_pos] + 1
+                
+                # if the next position has not been explored or this is the cheapest path to the next node 
+                if next_pos not in explored or new_cost < state_costs[next_pos]:
+                    state_costs[next_pos] = new_cost
+                    path_new = path + [action]
+
+                    # f_node is based on f(n) = g(n) + h(n) with h(n) the heuristic and g(n) the cost to reach the current node
+                    f_node = new_cost + self.get_maze_distance(next_pos, goal)
+                    frontier.push((successor, next_pos, path_new), f_node)
+
+    def choose_action(self, game_state):
+            """
+            Choose an action using A* to navigate to the nearest food.
+            """
+            my_pos = game_state.get_agent_state(self.index).get_position()
+            food_list = self.get_food(game_state).as_list()
+            # If there is no food left, stop
+            if not food_list:
+                return Directions.STOP
+            
+            goal = min(food_list, key=lambda food: self.get_maze_distance(my_pos, food))
+            path = self.astar_search(game_state, my_pos, goal)
+
+            # here make sure that the dude goes back to base if he has less than 2 food left (so if path len < 2)
+            return path[0] if path else Directions.STOP
+
+
+
+
+# class AstarAgent(ReflexCaptureAgent):
+#     def __init__(self, index):
+#         super().__init__(index)
+#         self.start = None  # To store the initial position
+
+#     def register_initial_state(self, game_state):
+#         print("REGISTER_INITIAL STATE ASTAR")
+#         self.start = game_state.get_agent_position(self.index)
+#         super().register_initial_state(game_state)
+
+#     def choose_action(self, game_state):
+#         """
+#         Use A* to choose the best next action.
+#         """
+#         print(f"USING ASTAR AGENT index {self.index}")
+#         path = self.a_star_search(game_state, self.null_heuristic)
+#         print(f"PATH: {path}")
+#         return path.pop(0) if path else Directions.STOP
+
+#     def a_star_search(self, game_state, heuristic):
+#         """
+#         Simplified A* search directly using game_state and heuristics.
+#         """
+#         print("A* SEARCH gets called by the agent")
+#         start_state = game_state.get_agent_position(self.index)
+#         food_list = self.get_food(game_state).as_list()  # List of food positions
+#         visited = set()
+#         frontier = util.PriorityQueue()
+
+#         # Push the starting state with an empty path and cost of 0
+#         frontier.push((start_state, [], 0), heuristic(start_state, food_list))
+
+#         while not frontier.is_empty():
+#             current_state, path, cost = frontier.pop()
+
+#             if current_state in food_list:  # Goal state: reaching food
+#                 return path
+
+#             if current_state not in visited:
+#                 visited.add(current_state)
+
+#                 # Generate successors
+#                 for direction in game_state.get_legal_actions(self.index):
+#                     successor_state = game_state.generate_successor(self.index, direction).get_agent_position(self.index)
+
+#                     if successor_state not in visited:
+#                         step_cost = 1  # Uniform cost for moving to a new position
+#                         new_cost = cost + step_cost
+#                         new_path = path + [direction]
+#                         priority = new_cost + heuristic(successor_state, food_list)
+#                         frontier.push((successor_state, new_path, new_cost), priority)
+#         return []
+
+#     def null_heuristic(self, state, food_list):
+#         """
+#         Simple heuristic: Manhattan distance to the closest food.
+#         """
+#         if not food_list:
+#             return 0
+#         return min(util.manhattan_distance(state, food) for food in food_list)
 

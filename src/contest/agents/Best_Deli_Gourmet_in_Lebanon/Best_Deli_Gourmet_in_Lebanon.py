@@ -412,7 +412,6 @@ class OurAgent(CaptureAgent):
                 return move[0]
             elif score <= 0:
                 self.mode = 'sneaky_pellet'
-                self.food_num = len(self.get_food(game_state).as_list())
                 return random.choice(game_state.get_legal_actions(self.index))
             else:
                 self.mode = 'park_the_bus'

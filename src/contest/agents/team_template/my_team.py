@@ -318,7 +318,7 @@ class OurAgent(CaptureAgent):
 
         self.modes = ['get_home', 'park_the_bus', 'sneaky_pellet']
         self.mode = 'park_the_bus'
-        #self.is_red = super.is_red
+        self.red = None
 
         #self.astar_gen_pellet = AstarGen(goal_type="pellet")
         #self.astar_gen_home = AstarGen(goal_type="home")
@@ -326,12 +326,16 @@ class OurAgent(CaptureAgent):
 
 
     def park_that_bus(self, game_state):
-        desired_column = 6 if game_state.is_on_red_team(self.index) else 6
-        #print(game_state.get_agent_position(self.index))
-        return -manhattan_distance(game_state.get_agent_position(self.index), (10,6))    # -game_state.get_num_agents() * 1000 + self.index
+        print(self.red)
+        desired_column = 6 if self.red else 7
+        desired_row = 7
+        agent_pos = game_state.get_agent_position(self.index)
+        print(agent_pos)
+        return -1000 * abs(game_state.get_agent_position(self.index)[1] - desired_row)    # -game_state.get_num_agents() * 1000 + self.index
 
     def choose_action(self, game_state):
         print(dir(game_state))
+        self.red = game_state.is_on_red_team(self.index)
         if self.mode == 'sneaky_pellet':
             return self.astar_gen_pellet.get_next_action()
         elif self.mode == 'sneaky_pellet':

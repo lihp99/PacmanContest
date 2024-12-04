@@ -269,7 +269,7 @@ class OffensiveAstarAgent(CaptureAgent):
             Choose an action using A* to navigate to the nearest food.
             """
             my_pos = game_state.get_agent_state(self.index).get_position()
-            print(my_pos)
+            #print(my_pos)
             food_list = self.get_food(game_state).as_list()
             # If there is no food left, stop
             if not food_list:
@@ -374,6 +374,7 @@ class OurAgent(CaptureAgent):
         self.red = None
         self.home = None
         self.display = None
+        self.food_list = None
 
         #self.astar_gen_pellet = AstarGen(goal_type="pellet")
         #self.astar_gen_home = AstarGen(goal_type="home")
@@ -387,6 +388,7 @@ class OurAgent(CaptureAgent):
             self.home = 15
         else:
             self.home = 16
+        self.food_list = self.get_food(game_state).as_list()
 
 
         import __main__
@@ -399,9 +401,8 @@ class OurAgent(CaptureAgent):
         return -manhattan_distance(game_state.get_agent_position(self.index), (10,6))    # -game_state.get_num_agents() * 1000 + self.index
 
     def choose_action(self, game_state):
-        print(self.mode)
         pos = game_state.get_agent_position(self.index)
-        score = game_state.get_score()
+        score = game_state.get_score() if self.red else -game_state.get_score()
 
         if self.mode == 'get_home':
             goals = [(self.home, i + 1) for i in range(14)]
@@ -411,32 +412,30 @@ class OurAgent(CaptureAgent):
                 return move[0]
             elif score <= 0:
                 self.mode = 'sneaky_pellet'
+                self.food_num = len(self.get_food(game_state).as_list())
                 return random.choice(game_state.get_legal_actions(self.index))
             else:
                 self.mode = 'park_the_bus'
                 return random.choice(game_state.get_legal_actions(self.index))
 
         elif self.mode == 'sneaky_pellet':
-            if self.red:
-                food = game_state.get_red_food()
-            else:
-                food = game_state.get_blue_food()
-            food_pos = [(row_idx, col_idx) for row_idx, row in enumerate(food) for col_idx, value in enumerate(row) if value]
+            print("going to get a pellet")
+            if pos in self.food_list:
+                self.mode = 'get_home'
+                self.food_list = self.get_food(game_state).as_list()
+                return random.choice(game_state.get_legal_actions(self.index))
 
-            move = self.astar_search(game_state, pos, food_pos)
-
+            move = self.astar_search(game_state, pos, self.food_list)
+            print(move)
             if move:
-                return move
-
-
-
-
-            return self.astar_gen_home.get_next_action()
+                return move[0]
+            else:
+                return random.choice(game_state.get_legal_actions(self.index))
 
         elif self.mode == 'park_the_bus':
             return self.minimax_gen.get_next_action(game_state)
         else:
-            return
+            return random.choice(game_state.get_legal_actions(self.index))
 
     def astar_search(self, initial_state, initial_pos, goals):
         frontier = util.PriorityQueue()

@@ -76,6 +76,8 @@ class Directions:
                STOP: STOP}
 
 
+
+
 class Configuration:
     """
     A Configuration holds the (x,y) coordinate of a character, along with its

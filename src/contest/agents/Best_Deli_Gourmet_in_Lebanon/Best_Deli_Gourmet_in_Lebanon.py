@@ -35,7 +35,7 @@ from util import nearest_point
 
 
 def create_team(first_index, second_index, is_red,
-                first='OurAgent', second='OffensiveAstarAgent', num_training=0):
+                first='OurAgent', second='Do_Nada', num_training=0):
 
 # def create_team(first_index, second_index, is_red,
 #                 first='OffensiveReflexAgent', second='AStarAgent', num_training=0):
@@ -59,6 +59,10 @@ def create_team(first_index, second_index, is_red,
 ##########
 # Agents #
 ##########
+
+class Do_Nada(CaptureAgent):
+    def choose_action(self, game_state):
+        return Directions.STOP
 
 class ReflexCaptureAgent(CaptureAgent):
     """
@@ -313,8 +317,6 @@ class MinimaxGen:
         # Determine if this agent is maximizing or minimizing
         is_maximizing = (agent_index % 2 == 0) == state.is_on_red_team(self.start_index)  # Red: 0, 2; Blue: 1, 3
 
-        #print(f"Agent Index: {agent_index}, Depth: {depth}, Is Maximizing: {is_maximizing}")
-        #print(f"Agent {agent_index} Legal Actions: {state.get_legal_actions(agent_index)}")
 
         if is_maximizing:
             return self.max_value(state, depth, agent_index, num_agents)
@@ -375,33 +377,57 @@ class OurAgent(CaptureAgent):
         self.home = None
         self.display = None
         self.food_list = None
+        self.restart = None
+        self.grid_size = None
 
-        #self.astar_gen_pellet = AstarGen(goal_type="pellet")
-        #self.astar_gen_home = AstarGen(goal_type="home")
         self.minimax_gen = MinimaxGen(depth=3, evaluation_function=self.park_that_bus, start_index=self.index)
 
     def register_initial_state(self, game_state):
 
+        grid = game_state.get_walls().as_list()
+        self.grid_size = (grid[-1][0] + 1, grid[-1][1] + 1)
+
         self.red = game_state.is_on_red_team(self.index)
         self.register_team(self.get_team(game_state))
         if self.red:
-            self.home = 15
+            self.home = self.grid_size[0] / 2
         else:
-            self.home = 16
+            self.home = (self.grid_size[0] + 2) / 2
         self.food_list = self.get_food(game_state).as_list()
-
+        self.restart = game_state.get_agent_position(self.index)
 
         import __main__
         if '_display' in dir(__main__):
             self.display = __main__._display
 
     def park_that_bus(self, game_state):
-        desired_column = 6 if game_state.is_on_red_team(self.index) else 6
-        #print(game_state.get_agent_position(self.index))
-        return -manhattan_distance(game_state.get_agent_position(self.index), (10,6))    # -game_state.get_num_agents() * 1000 + self.index
+        # DO NOT LET IT CROSS THE BORDER
+        if game_state.get_agent_position(self.index)[0] > self.home and self.red:
+            return float('-inf')
+        if game_state.get_agent_position(self.index)[0] < self.home and not self.red:
+            return float('-inf')
+
+        enemies = game_state.get_blue_team_indices() if self.red else game_state.get_red_team_indices()
+        enemy_pos = []
+        for i in enemies:
+            if game_state.get_agent_position(i):
+                enemy_pos.append((game_state.get_agent_position(i), i))
+        if not enemy_pos:
+            while True:
+                value = round(random.normalvariate(7.5, 3))
+                if 2 <= value <= 14:
+                    return value
+            return manhattan_distance(game_state.get_agent_position(self.index), (self.home, ))
+        target = min(enemy_pos, key=lambda pos: manhattan_distance(game_state.get_agent_position(self.index), pos[0]))[1]
+        return 100
 
     def choose_action(self, game_state):
+        print(game_state.get_walls())
         pos = game_state.get_agent_position(self.index)
+        print(pos)
+        if pos == self.restart:
+            self.mode = 'get_home'
+
         score = game_state.get_score() if self.red else -game_state.get_score()
 
         if self.mode == 'get_home':
@@ -418,14 +444,14 @@ class OurAgent(CaptureAgent):
                 return random.choice(game_state.get_legal_actions(self.index))
 
         elif self.mode == 'sneaky_pellet':
-            print("going to get a pellet")
+            #print("going to get a pellet")
             if pos in self.food_list:
                 self.mode = 'get_home'
                 self.food_list = self.get_food(game_state).as_list()
                 return random.choice(game_state.get_legal_actions(self.index))
 
             move = self.astar_search(game_state, pos, self.food_list)
-            print(move)
+            #print(move)
             if move:
                 return move[0]
             else:

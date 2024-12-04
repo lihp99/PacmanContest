@@ -422,7 +422,6 @@ class OurAgent(CaptureAgent):
         return 100
 
     def choose_action(self, game_state):
-        print(game_state.get_walls())
         pos = game_state.get_agent_position(self.index)
         print(pos)
         if pos == self.restart:

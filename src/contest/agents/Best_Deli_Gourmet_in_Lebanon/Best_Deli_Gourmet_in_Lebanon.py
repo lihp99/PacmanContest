@@ -35,7 +35,7 @@ from util import nearest_point
 
 
 def create_team(first_index, second_index, is_red,
-                first='DefensiveReflexAgent', second='OffensiveAstarAgent', num_training=0):
+                first='OurAgent', second='OffensiveAstarAgent', num_training=0):
 
 # def create_team(first_index, second_index, is_red,
 #                 first='OffensiveReflexAgent', second='AStarAgent', num_training=0):
@@ -211,7 +211,8 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
     def get_weights(self, game_state, action):
         return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2}
 
-
+def manhattan_distance(pos1, pos2):
+    return sum(abs(a - b) for a, b in zip(pos1, pos2))
 
 
 class OffensiveAstarAgent(CaptureAgent):
@@ -268,6 +269,7 @@ class OffensiveAstarAgent(CaptureAgent):
             Choose an action using A* to navigate to the nearest food.
             """
             my_pos = game_state.get_agent_state(self.index).get_position()
+            print(my_pos)
             food_list = self.get_food(game_state).as_list()
             # If there is no food left, stop
             if not food_list:
@@ -300,7 +302,7 @@ class MinimaxGen:
 
         # Skip unobservable opponent agents
         while not state.get_agent_position(agent_index):
-            print(f"Skipping unobservable agent: {agent_index}")
+            #print(f"Skipping unobservable agent: {agent_index}")
             agent_index = (agent_index + 1) % num_agents
             # Decrease depth only after a full cycle
             if agent_index == self.start_index:
@@ -311,8 +313,8 @@ class MinimaxGen:
         # Determine if this agent is maximizing or minimizing
         is_maximizing = (agent_index % 2 == 0) == state.is_on_red_team(self.start_index)  # Red: 0, 2; Blue: 1, 3
 
-        print(f"Agent Index: {agent_index}, Depth: {depth}, Is Maximizing: {is_maximizing}")
-        print(f"Agent {agent_index} Legal Actions: {state.get_legal_actions(agent_index)}")
+        #print(f"Agent Index: {agent_index}, Depth: {depth}, Is Maximizing: {is_maximizing}")
+        #print(f"Agent {agent_index} Legal Actions: {state.get_legal_actions(agent_index)}")
 
         if is_maximizing:
             return self.max_value(state, depth, agent_index, num_agents)
@@ -368,13 +370,28 @@ class OurAgent(CaptureAgent):
 
 
         self.modes = ['get_home', 'park_the_bus', 'sneaky_pellet']
-        self.mode = 'park_the_bus'
-        #self.is_red = super.is_red
+        self.mode = 'get_home'
+        self.red = None
+        self.home = None
+        self.display = None
 
         #self.astar_gen_pellet = AstarGen(goal_type="pellet")
         #self.astar_gen_home = AstarGen(goal_type="home")
         self.minimax_gen = MinimaxGen(depth=3, evaluation_function=self.park_that_bus, start_index=self.index)
 
+    def register_initial_state(self, game_state):
+
+        self.red = game_state.is_on_red_team(self.index)
+        self.register_team(self.get_team(game_state))
+        if self.red:
+            self.home = 15
+        else:
+            self.home = 16
+
+
+        import __main__
+        if '_display' in dir(__main__):
+            self.display = __main__._display
 
     def park_that_bus(self, game_state):
         desired_column = 6 if game_state.is_on_red_team(self.index) else 6
@@ -382,19 +399,86 @@ class OurAgent(CaptureAgent):
         return -manhattan_distance(game_state.get_agent_position(self.index), (10,6))    # -game_state.get_num_agents() * 1000 + self.index
 
     def choose_action(self, game_state):
-        print(dir(game_state))
-        if self.mode == 'sneaky_pellet':
-            return self.astar_gen_pellet.get_next_action()
+        print(self.mode)
+        pos = game_state.get_agent_position(self.index)
+        score = game_state.get_score()
+
+        if self.mode == 'get_home':
+            goals = [(self.home, i + 1) for i in range(14)]
+            move = self.astar_search(game_state, pos, goals)
+
+            if move:
+                return move[0]
+            elif score <= 0:
+                self.mode = 'sneaky_pellet'
+                return random.choice(game_state.get_legal_actions(self.index))
+            else:
+                self.mode = 'park_the_bus'
+                return random.choice(game_state.get_legal_actions(self.index))
+
         elif self.mode == 'sneaky_pellet':
+            if self.red:
+                food = game_state.get_red_food()
+            else:
+                food = game_state.get_blue_food()
+            food_pos = [(row_idx, col_idx) for row_idx, row in enumerate(food) for col_idx, value in enumerate(row) if value]
+
+            move = self.astar_search(game_state, pos, food_pos)
+
+            if move:
+                return move
+
+
+
+
             return self.astar_gen_home.get_next_action()
+
         elif self.mode == 'park_the_bus':
-            print(game_state.get_red_team_indices(), game_state.get_blue_team_indices())
             return self.minimax_gen.get_next_action(game_state)
         else:
             return
 
+    def astar_search(self, initial_state, initial_pos, goals):
+        frontier = util.PriorityQueue()
+        frontier.push((initial_state, initial_pos, []), 0)
+        explored = set()
+        state_costs = {initial_pos: 0}  # Dictionary to track the minimum cost to reach each state
 
+        while not frontier.is_empty():
+            current_state, current_pos, path = frontier.pop()
 
+            if current_pos in goals:
+                return path
+
+            if current_pos in explored:
+                continue  # skip expanded nodes
+
+            else:
+                explored.add(current_pos)
+
+            for action in current_state.get_legal_actions(self.index):
+                if action == Directions.STOP:
+                    continue
+
+                successor = current_state.generate_successor(self.index,
+                                                             action)  # Returns the successor state (a GameState object) after the specified agent takes the action.
+                next_pos = successor.get_agent_state(
+                    self.index).get_position()  # Returns the position of agent after taken the current action
+                next_pos = nearest_point(next_pos)
+
+                if next_pos in explored:
+                    continue
+
+                new_cost = state_costs[current_pos] + 1
+
+                # if the next position has not been explored or this is the cheapest path to the next node
+                if next_pos not in explored or new_cost < state_costs[next_pos]:
+                    state_costs[next_pos] = new_cost
+                    path_new = path + [action]
+
+                    # f_node is based on f(n) = g(n) + h(n) with h(n) the heuristic and g(n) the cost to reach the current node
+                    f_node = new_cost + sum([manhattan_distance(next_pos, goal) for goal in goals])
+                    frontier.push((successor, next_pos, path_new), f_node)
 
 
 

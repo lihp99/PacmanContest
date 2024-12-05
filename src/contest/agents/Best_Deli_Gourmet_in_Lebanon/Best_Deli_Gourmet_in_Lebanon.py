@@ -35,7 +35,7 @@ from util import nearest_point
 
 
 def create_team(first_index, second_index, is_red,
-                first='OurTestAgentMARK2', second='OffensiveAstarAgent', num_training=0):
+                first='OurTestAgent', second='OffensiveAstarAgent', num_training=0):
 
 # def create_team(first_index, second_index, is_red,
 #                 first='OffensiveReflexAgent', second='AStarAgent', num_training=0):
@@ -693,15 +693,15 @@ class OurTestAgent(CaptureAgent):
         if score < 0:
             self.mode = 'sneaky_pellet'
 
-        if len(self.get_food(game_state).as_list()) <= 2 or self.get_food_you_are_defending(game_state).count() <= 9:
+        if len(self.get_food(game_state).as_list()) <= 2 or self.get_food_you_are_defending(game_state).count() <= 11:
             print("DEFEND!!!")
             self.mode = 'park_the_bus'
 
-        if game_state.get_agent_state(self.index).scared_timer > 2:
-            self.mode = 'sneaky_pellet'
+        # if game_state.get_agent_state(self.index).scared_timer > 25:
+        #     self.mode = 'sneaky_pellet'
 
         if self.mode == 'get_home':
-            goals = [(self.home, i + 1) for i in range(14)]
+            goals = [(self.home, i) for i in range(self.height)]
             move = self.astar_search(game_state, pos, goals)
 
             if move:

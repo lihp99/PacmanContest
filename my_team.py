@@ -214,6 +214,7 @@ class DefensiveReflexAgent(ReflexCaptureAgent):
 
 
 
+
 class OffensiveAstarAgent(CaptureAgent):
     def __init__(self, index, time_for_computing=.1):
         super().__init__(index, time_for_computing)
@@ -270,8 +271,13 @@ class OffensiveAstarAgent(CaptureAgent):
             my_pos = game_state.get_agent_state(self.index).get_position()
             food_list = self.get_food(game_state).as_list()
             # If there is no food left, stop
-            if not food_list:
-                return Directions.STOP
+            if len(food_list) <= 2:
+                # set the goal to the start position
+                goal = self.start
+                path = self.astar_search(game_state, my_pos, goal)
+                return path[0] if path else Directions.STOP
+                
+                # return Directions.STOP
             
             goal = min(food_list, key=lambda food: self.get_maze_distance(my_pos, food))
             path = self.astar_search(game_state, my_pos, goal)
@@ -358,6 +364,10 @@ class MinimaxGen:
         return best_action
 
 
+    
+def manhattan_distance(pos1, pos2):
+    return sum(abs(a - b) for a, b in zip(pos1, pos2))
+
 
 
 
@@ -373,7 +383,7 @@ class AttaccProteccAgent(CaptureAgent):
         self.home = None
         self.display = None
         self.food_list = None
-
+        self.start = None
         #self.astar_gen_pellet = AstarGen(goal_type="pellet")
         #self.astar_gen_home = AstarGen(goal_type="home")
         self.minimax_gen = MinimaxGen(depth=3, evaluation_function=self.park_that_bus, start_index=self.index)
@@ -396,7 +406,7 @@ class AttaccProteccAgent(CaptureAgent):
             self.display = __main__._display
 
     def park_that_bus(self, game_state):
-        desired_column = 6 if game_state.is_on_red_team(self.index) else 6
+        # desired_column = 6 if game_state.is_on_red_team(self.index) else 6
         #print(game_state.get_agent_position(self.index))
         return -manhattan_distance(game_state.get_agent_position(self.index), (10,6))    # -game_state.get_num_agents() * 1000 + self.index
         
@@ -555,7 +565,6 @@ class AttaccProteccAgent(CaptureAgent):
                     # f_node is based on f(n) = g(n) + h(n) with h(n) the heuristic and g(n) the cost to reach the current node
                     f_node = new_cost + sum([manhattan_distance(next_pos, goal) for goal in goals])
                     frontier.push((successor, next_pos, path_new), f_node)
-
 
 
 
